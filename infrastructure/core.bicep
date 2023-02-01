@@ -2,12 +2,20 @@ param location string
 param prefix string
 param vnetSettings object = {
   addressPrefixes: [
-    '10.0.0.0/20'
+    '10.0.0.0/19'
   ]
   subnets: [
     {
       name: 'subnet1'
-      addressPrefix: '10.0.0.0/22'
+      addressPrefix: '10.0.0.0/21'
+    }
+    {
+      name: 'acaAppSubnet'
+      addressPrefix: '10.0.8.0/21'
+    }
+    {
+      name: 'acaControlPlaneSubnet'
+      addressPrefix: '10.0.16.0/21'
     }
   ]
 }
@@ -143,5 +151,39 @@ resource cosmosPrivateEndpointDnsLink 'Microsoft.Network/privateEndpoints/privat
         }
       }
     ]
+  }
+}
+
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' = {
+  name: '${replace(prefix,'-','')}acr'//Nimessä ei saa olla merkkejä eikä välejä, putsataan ne pois, jos on
+  location: location
+  sku: {
+    name: 'Basic' //Premiumissa olis käytössä tokenit, basicissa vain credentials, joten niillä mennään
+  }
+  properties: {
+    adminUserEnabled: true
+  }
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2021-10-01' = { //@2019-09-01 oli vanha API, vaihdettu 
+  name: '${prefix}-kv'
+  location: location
+  properties: {
+    enabledForDeployment: true
+    enabledForTemplateDeployment: true
+    enabledForDiskEncryption: true
+    enableRbacAuthorization: true //Tätä ei vanhemmassa @2019-09-01 versiossa ole
+    tenantId: tenant().tenantId
+    sku: {
+      name: 'standard'
+      family: 'A'
+    }
+  }
+}
+
+resource keyVaultSecret 'Microsoft.KeyVault/vaults/secrets@2019-09-01' = {
+  name: '${keyVault.name}/acrAdminPassword'
+  properties: {
+    value: containerRegistry.listCredentials().passwords[0].value
   }
 }
